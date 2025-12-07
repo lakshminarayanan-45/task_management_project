@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, Clock, Edit2, Trash2, Paperclip, MessageSquare, User, Flag, Upload, X } from "lucide-react";
+import { Calendar, Clock, Edit2, Trash2, Paperclip, MessageSquare, User, Flag, Upload, X, Check, Send } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils.js";
 import { useState, useRef } from "react";
@@ -27,7 +27,20 @@ const statusConfig = {
 };
 
 export function TaskDetailModal() {
-  const { selectedTask, setSelectedTask, updateTask, deleteTask, canEditTask, canDeleteTask, currentUser } = useTaskContext();
+  const { 
+    selectedTask, 
+    setSelectedTask, 
+    updateTask, 
+    deleteTask, 
+    canEditTask, 
+    canDeleteTask, 
+    currentUser,
+    addComment,
+    editComment,
+    deleteComment,
+    canEditComment,
+    canDeleteComment
+  } = useTaskContext();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
     title: "",
@@ -36,6 +49,9 @@ export function TaskDetailModal() {
     priority: "",
   });
   const [newAttachments, setNewAttachments] = useState([]);
+  const [newComment, setNewComment] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editCommentContent, setEditCommentContent] = useState("");
   const fileInputRef = useRef(null);
 
   if (!selectedTask) return null;
@@ -89,6 +105,40 @@ export function TaskDetailModal() {
 
   const removeAttachment = (index) => {
     setNewAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddComment = () => {
+    if (!newComment.trim()) return;
+    addComment(selectedTask.id, newComment.trim());
+    setNewComment("");
+    toast({
+      title: "Comment added",
+      description: "Your comment has been posted.",
+    });
+  };
+
+  const handleStartEditComment = (comment) => {
+    setEditingCommentId(comment.id);
+    setEditCommentContent(comment.content);
+  };
+
+  const handleSaveComment = (commentId) => {
+    if (!editCommentContent.trim()) return;
+    editComment(selectedTask.id, commentId, editCommentContent.trim());
+    setEditingCommentId(null);
+    setEditCommentContent("");
+    toast({
+      title: "Comment updated",
+      description: "Your comment has been updated.",
+    });
+  };
+
+  const handleDeleteComment = (commentId) => {
+    deleteComment(selectedTask.id, commentId);
+    toast({
+      title: "Comment deleted",
+      description: "The comment has been removed.",
+    });
   };
 
   const priority = priorityConfig[selectedTask.priority];
@@ -332,36 +382,94 @@ export function TaskDetailModal() {
           )}
 
           {/* Comments */}
-          {selectedTask.comments.length > 0 && (
-            <>
-              <Separator />
-              <div>
-                <h4 className="font-medium mb-3 flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4" />
-                  Comments ({selectedTask.comments.length})
-                </h4>
-                <div className="space-y-4">
-                  {selectedTask.comments.map((comment) => (
-                    <div key={comment.id} className="flex gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={comment.user.avatar} />
-                        <AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-medium">{comment.user.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(comment.createdAt), "MMM d, yyyy 'at' h:mm a")}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{comment.content}</p>
+          <Separator />
+          <div>
+            <h4 className="font-medium mb-3 flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Comments ({selectedTask.comments.length})
+            </h4>
+            
+            {/* Add new comment */}
+            <div className="flex gap-2 mb-4">
+              <Input
+                placeholder="Write a comment..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
+              />
+              <Button size="sm" onClick={handleAddComment} disabled={!newComment.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {selectedTask.comments.length > 0 ? (
+              <div className="space-y-4">
+                {selectedTask.comments.map((comment) => (
+                  <div key={comment.id} className="flex gap-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={comment.user.avatar} />
+                      <AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium">{comment.user.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(comment.createdAt), "MMM d, yyyy 'at' h:mm a")}
+                        </span>
+                        {comment.editedAt && (
+                          <span className="text-xs text-muted-foreground">(edited)</span>
+                        )}
                       </div>
+                      
+                      {editingCommentId === comment.id ? (
+                        <div className="flex gap-2">
+                          <Input
+                            value={editCommentContent}
+                            onChange={(e) => setEditCommentContent(e.target.value)}
+                            className="flex-1"
+                          />
+                          <Button size="sm" variant="ghost" onClick={() => handleSaveComment(comment.id)}>
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditingCommentId(null)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm text-muted-foreground">{comment.content}</p>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {canEditComment(comment) && (
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="h-6 w-6 p-0"
+                                onClick={() => handleStartEditComment(comment)}
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                            {canDeleteComment(comment) && (
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                onClick={() => handleDeleteComment(comment.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-            </>
-          )}
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">No comments yet. Be the first to comment!</p>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

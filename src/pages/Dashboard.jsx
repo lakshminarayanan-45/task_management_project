@@ -9,7 +9,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { CheckCircle, Clock, AlertCircle, ListTodo, LayoutGrid, List, Search, CalendarDays } from "lucide-react";
 import { TaskListModal } from "@/components/dashboard/TaskListModal.jsx";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal.jsx";
-import { format, isSameDay, parseISO } from "date-fns";
+import { format, isSameDay, parseISO, startOfToday, isBefore } from "date-fns";
 
 const statusConfig = {
   todo: { label: "To Do", className: "bg-muted text-muted-foreground" },
@@ -26,6 +26,8 @@ export default function Dashboard() {
   const [modalTitle, setModalTitle] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date());
+
+  const today = startOfToday();
 
   const baseTasks = currentUser.role === "employee" 
     ? tasks.filter((task) => task.assignee.id === currentUser.id)
@@ -52,6 +54,25 @@ export default function Dashboard() {
 
   // Tasks for selected date
   const tasksForSelectedDate = filteredTasks.filter((task) => isSameDay(parseISO(task.dueDate), selectedDate));
+
+  // Get dates that have tasks for highlighting
+  const taskDates = filteredTasks.map((task) => parseISO(task.dueDate));
+
+  // Custom modifier for highlighting task dates
+  const modifiers = {
+    hasTask: taskDates,
+  };
+
+  const modifiersStyles = {
+    hasTask: {
+      backgroundColor: "hsl(var(--primary) / 0.2)",
+      borderRadius: "50%",
+      fontWeight: "bold",
+    },
+  };
+
+  // Disable past dates
+  const disabledDays = { before: today };
 
   return (
     <div className="space-y-6 md:space-y-8 animate-fade-in">
@@ -116,15 +137,30 @@ export default function Dashboard() {
         <Card>
           <CardContent className="p-4 md:p-6">
             <h3 className="font-semibold mb-4 flex items-center gap-2"><CalendarDays className="h-5 w-5 text-primary" />Calendar View</h3>
-            <Calendar mode="single" selected={selectedDate} onSelect={(date) => date && setSelectedDate(date)} className="rounded-md border w-full" />
+            <Calendar 
+              mode="single" 
+              selected={selectedDate} 
+              onSelect={(date) => date && setSelectedDate(date)} 
+              className="rounded-md border w-full pointer-events-auto"
+              modifiers={modifiers}
+              modifiersStyles={modifiersStyles}
+              disabled={disabledDays}
+              fromDate={today}
+            />
             <div className="mt-4">
-              <p className="text-sm font-medium mb-2">Tasks due on {format(selectedDate, "MMM d, yyyy")}:</p>
+              <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-primary" />
+                Tasks due on {format(selectedDate, "MMM d, yyyy")}:
+              </p>
               {tasksForSelectedDate.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No tasks due on this date</p>
               ) : (
                 <div className="space-y-2">
                   {tasksForSelectedDate.map((task) => (
-                    <div key={task.id} onClick={() => setSelectedTask(task)} className="p-2 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted text-sm truncate">{task.title}</div>
+                    <div key={task.id} onClick={() => setSelectedTask(task)} className="p-2 rounded-lg bg-primary/10 border border-primary/20 cursor-pointer hover:bg-primary/20 text-sm truncate flex items-center gap-2">
+                      <Clock className="h-3 w-3 text-primary shrink-0" />
+                      {task.title}
+                    </div>
                   ))}
                 </div>
               )}
